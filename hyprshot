@@ -148,28 +148,35 @@ function begin_grab() {
         HYPRPICKER_PID=$!
     fi
     local option=$1
+    local geometry=""
     case $option in
         output)
             if [ $CURRENT -eq 1 ]; then
-                local geometry=`grab_active_output`
+                geometry=`grab_active_output`
             elif [ -z $SELECTED_MONITOR ]; then
-                local geometry=`grab_output`
+                geometry=`grab_output`
             else
-                local geometry=`grab_selected_output $SELECTED_MONITOR`
+                geometry=`grab_selected_output $SELECTED_MONITOR`
             fi
             ;;
         region)
-            local geometry=`grab_region`
+            geometry=`grab_region`
             ;;
         window)
             if [ $CURRENT -eq 1 ]; then
-                local geometry=`grab_active_window`
+                geometry=`grab_active_window`
             else
-                local geometry=`grab_window`
+                geometry=`grab_window`
             fi
 	    geometry=`trim "${geometry}"`
             ;;
     esac
+
+    if [ -z "${geometry}" ]; then
+        Print "No geometry selected, aborting screenshot\n"
+        exit 1
+    fi
+
     if [ ${DELAY} -gt 0 ] 2>/dev/null; then
         sleep ${DELAY}
     fi
