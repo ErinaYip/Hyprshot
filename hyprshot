@@ -8,7 +8,7 @@ Usage: hyprshot [options ..] [-m [mode] ..] -- [command]
 
 Hyprshot is an utility to easily take screenshot in Hyprland using your mouse.
 
-It allows taking screenshots of windows, regions and monitors which are saved to a folder of your choosing and copied to your clipboard.
+It allows taking screenshots of windows, regions and monitors which are saved to a temporary folder and copied to your clipboard.
 
 Examples:
   capture a window                      \`hyprshot -m window\`
@@ -18,7 +18,7 @@ Examples:
 Options:
   -h, --help                show help message
   -m, --mode                one of: output, window, region, active, OUTPUT_NAME
-  -o, --output-folder       directory in which to save screenshot
+  --max-images              maximum number of temporary Hyprshot images to keep
   -f, --filename            the file name of the resulting screenshot
   -D, --delay               how long to delay taking the screenshot after selection (seconds)
   -z, --freeze              freeze the screen on initialization
@@ -117,18 +117,41 @@ function save_geometry() {
     fi
 
     if [ $CLIPBOARD -eq 0 ]; then
-        mkdir -p "$SAVEDIR"
+        mkdir -p "$TMP_SAVE_DIR"
         grim -g "${geometry}" "$SAVE_FULLPATH"
         output="$SAVE_FULLPATH"
         wl-copy --type image/png < "$output"
         [ -z "$COMMAND" ] || {
             "$COMMAND" "$output"
         }
+        cleanup_savedir
     else
         wl-copy --type image/png < <(grim -g "${geometry}" -)
     fi
 
-    send_notification $output
+    send_notification "$output"
+}
+
+function cleanup_savedir() {
+    if [ "$MAX_IMAGES" -le 0 ] 2>/dev/null; then
+        return 0
+    fi
+
+    local image_count
+    image_count=$(find "$TMP_SAVE_DIR" -maxdepth 1 -type f -name '????-??-??-??????_hyprshot.png' -printf '.' | wc -c)
+
+    local remove_count=$((image_count - MAX_IMAGES))
+    if [ "$remove_count" -le 0 ]; then
+        return 0
+    fi
+
+    local entry
+    local removed=0
+    while IFS= read -r -d '' entry; do
+        rm -f -- "${entry#* }"
+        removed=$((removed + 1))
+        [ "$removed" -ge "$remove_count" ] && break
+    done < <(find "$TMP_SAVE_DIR" -maxdepth 1 -type f -name '????-??-??-??????_hyprshot.png' -printf '%T@ %p\0' | sort -zn)
 }
 
 function checkRunning() {
@@ -244,7 +267,7 @@ function parse_mode() {
 }
 
 function args() {
-    local options=$(getopt -o hf:o:m:D:dszr:t: --long help,filename:,output-folder:,mode:,delay:,clipboard-only,debug,silent,freeze,raw,notif-timeout:,slurp-args: -- "$@")
+    local options=$(getopt -o hf:m:D:dszr:t: --long help,filename:,max-images:,mode:,delay:,clipboard-only,debug,silent,freeze,raw,notif-timeout:,slurp-args: -- "$@")
     eval set -- "$options"
 
     while true; do
@@ -253,9 +276,9 @@ function args() {
                 Help
                 exit
                 ;;
-            -o | --output-folder)
+            --max-images)
                 shift;
-                SAVEDIR=$1
+                MAX_IMAGES=$1
                 ;;
             -f | --filename)
                 shift;
@@ -304,6 +327,11 @@ function args() {
         Print "A mode is required\n\nAvailable modes are:\n\toutput\n\tregion\n\twindow\n"
         exit 2
     fi
+
+    if ! [[ "$MAX_IMAGES" =~ ^[0-9]+$ ]]; then
+        1>&2 printf '%s\n' "--max-images must be a non-negative integer"
+        exit 2
+    fi
 }
 
 if [ -z $1 ]; then
@@ -318,12 +346,12 @@ RAW=0
 NOTIF_TIMEOUT=5000
 CURRENT=0
 FREEZE=0
-[ -z "$XDG_PICTURES_DIR" ] && type xdg-user-dir &> /dev/null && XDG_PICTURES_DIR=$(xdg-user-dir PICTURES)
+MAX_IMAGES=${HYPRSHOT_MAX_IMAGES:-0}
 FILENAME="$(date +'%Y-%m-%d-%H%M%S_hyprshot.png')"
-[ -z "$HYPRSHOT_DIR" ] && SAVEDIR=${XDG_PICTURES_DIR:=~} || SAVEDIR=${HYPRSHOT_DIR}
+TMP_SAVE_DIR="${HYPRSHOT_TMP_DIR:-${TMPDIR:-/tmp}/hyprshot}"
 
 args $0 "$@"
 
-SAVE_FULLPATH="$SAVEDIR/$FILENAME"
+SAVE_FULLPATH="$TMP_SAVE_DIR/$FILENAME"
 [ $CLIPBOARD -eq 0 ] && Print "Saving in: %s\n" "$SAVE_FULLPATH"
 begin_grab $OPTION & checkRunning

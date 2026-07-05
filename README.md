@@ -6,7 +6,7 @@
 
 Hyprshot is an utility to easily take screenshot in Hyprland using your mouse.
 
-It allows taking screenshots of windows, regions and monitors which are saved to a folder of your choosing and copied to your clipboard.
+It allows taking screenshots of windows, regions and monitors which are saved to a temporary folder and copied to your clipboard.
 
 ## Installation
 
@@ -98,8 +98,17 @@ Take a screenshot of a monitor by using `PrintScr`
 
 Take a screenshot of a region by using `MOD + Shift + PrintScr`
 
-## Save location
+## Temporary save location
 
-You can choose which directory Hyprshot will save screenshots in by setting an `HYPRSHOT_DIR` environment variable to your preferred location.
+Hyprshot saves screenshots to a temporary directory and copies them to your clipboard.
 
-If `HYPRSHOT_DIR` is not set, Hyprshot will attempt to save to `XDG_PICTURES_DIR` and will further fallback to your home directory if this is also not available.
+By default, screenshots are saved to `${TMPDIR:-/tmp}/hyprshot`. You can choose a different temporary directory by setting `HYPRSHOT_TMP_DIR`.
+
+Set `HYPRSHOT_MAX_IMAGES` or pass `--max-images` to keep only the newest temporary screenshots:
+
+```bash
+$ HYPRSHOT_MAX_IMAGES=20 hyprshot -m region
+$ hyprshot -m region --max-images 20
+```
+
+Cleanup only removes Hyprshot's timestamped temporary images from that directory.
